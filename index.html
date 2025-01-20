@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geometry Dash with Jumpable Obstacles</title>
+    <title>Dash</title>
     <style>
         body {
             margin: 0;
@@ -13,9 +13,30 @@
             display: block;
             background-color: #f0f0f0;
         }
+        #passwordScreen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+        }
+        #passwordButton {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        #passwordButton:hover {
+            background-color: #2980b9;
+        }
         #restartButton {
             position: absolute;
-            top: 50%;
+            top: 60%;
             left: 50%;
             transform: translate(-50%, -50%);
             padding: 10px 20px;
@@ -30,20 +51,42 @@
         #restartButton:hover {
             background-color: #2980b9;
         }
+        #gameContainer {
+            display: none;
+        }
     </style>
 </head>
 <body>
-<!-- ester egg :) -->
-<canvas id="gameCanvas"></canvas>
-<button id="restartButton">Restart</button>
+<div id="passwordScreen">
+    <input type="password" id="passwordInput" placeholder="Enter password">
+    <button id="passwordButton">Submit</button>
+</div>
+<div id="gameContainer">
+    <canvas id="gameCanvas"></canvas>
+    <button id="restartButton">Restart</button>
+</div>
 
 <script>
-    // Canvas setup
+    // Password check
+    const passwordScreen = document.getElementById("passwordScreen");
+    const passwordInput = document.getElementById("passwordInput");
+    const passwordButton = document.getElementById("passwordButton");
+
+    const gameContainer = document.getElementById("gameContainer");
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-
-    // Restart button
     const restartButton = document.getElementById('restartButton');
+
+    passwordButton.addEventListener("click", () => {
+        const password = passwordInput.value;
+        if (password === "matthewhaslrizz") {
+            passwordScreen.style.display = "none";
+            gameContainer.style.display = "block";
+            startGame();
+        } else {
+            alert("Incorrect password. Try again.");
+        }
+    });
 
     // Set canvas size
     canvas.width = window.innerWidth;
@@ -57,25 +100,35 @@
         height: 30,
         color: '#3498db',
         dy: 0,
-        jumpForce: -20, // Increased jump height
-        gravity: 1, // Adjusted gravity for smoother fall
+        jumpForce: -15,
+        gravity: 0.8,
         isJumping: false,
+        jumpCount: 0, // Track jumps for double jump
+        maxJumps: 2,  // Allow up to 2 jumps
     };
 
     const obstacles = [];
     const obstacleSpeedBase = 8;
     let obstacleSpeed = obstacleSpeedBase;
-    const obstacleFrequency = 1800; // Time in ms between obstacles
+    const obstacleFrequency = 1800;
     let lastObstacleTime = Date.now();
 
     let score = 0;
     let gameOver = false;
+    let doubleJumpUsed = false; // Track if double jump was used
 
-    // Event listeners
+    // Event listeners for jump
     window.addEventListener('keydown', (e) => {
-        if (e.code === 'Space' && !player.isJumping && !gameOver) {
-            player.dy = player.jumpForce;
-            player.isJumping = true;
+        if (e.code === 'Space' && !gameOver) {
+            if (player.jumpCount < player.maxJumps) {
+                player.dy = player.jumpForce;
+                player.isJumping = true;
+                player.jumpCount++;
+
+                if (player.jumpCount === 2) {
+                    doubleJumpUsed = true; // Mark double jump usage
+                }
+            }
         }
     });
 
@@ -83,14 +136,15 @@
 
     // Create a new obstacle
     function createObstacle() {
-        const height = Math.random() * (canvas.height / 4) + 50; // Random height, smaller max
-        const width = Math.random() * 50 + 30; // Random width
+        const height = Math.random() * (canvas.height / 4) + 50;
+        const width = Math.random() * 50 + 30;
         obstacles.push({
             x: canvas.width,
             y: canvas.height - height - 50,
             width,
             height,
             color: '#e74c3c',
+            passed: false, // Track if the obstacle has been passed
         });
     }
 
@@ -115,19 +169,28 @@
             const obstacle = obstacles[i];
             obstacle.x -= obstacleSpeed;
 
+            // Award points when the player passes the obstacle
+            if (!obstacle.passed && obstacle.x + obstacle.width < player.x) {
+                obstacle.passed = true;
+                if (doubleJumpUsed) {
+                    score += 1; // Single point for double jump
+                } else {
+                    score += 2; // Two points for single jump
+                }
+                doubleJumpUsed = false; // Reset double jump usage for the next obstacle
+                obstacleSpeed += 0.1; // Increase obstacle speed slightly
+            }
+
             // Remove off-screen obstacles
             if (obstacle.x + obstacle.width < 0) {
                 obstacles.splice(i, 1);
-                score++;
-                // Increase speed slightly every time an obstacle is passed
-                obstacleSpeed += 0.1;
             }
 
             // Draw the obstacle
             ctx.fillStyle = obstacle.color;
             ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
 
-            // Collision detection
+            // Collision detection with obstacles
             if (
                 player.x < obstacle.x + obstacle.width &&
                 player.x + player.width > obstacle.x &&
@@ -152,9 +215,13 @@
         // Player movement
         player.y += player.dy;
         player.dy += player.gravity;
+
+        // Check if the player is on the ground
         if (player.y + player.height >= canvas.height - 50) {
             player.y = canvas.height - 50 - player.height;
             player.isJumping = false;
+            player.jumpCount = 0; // Reset jumps when touching the ground
+            doubleJumpUsed = false; // Reset double jump tracking
         }
 
         // Loop
@@ -175,7 +242,6 @@
 
     // Restart the game
     function restartGame() {
-        // Reset game variables
         player.y = canvas.height - 100;
         player.dy = 0;
         obstacles.length = 0;
@@ -183,16 +249,14 @@
         obstacleSpeed = obstacleSpeedBase;
         lastObstacleTime = Date.now();
         gameOver = false;
-
-        // Hide restart button
         restartButton.style.display = 'none';
-
-        // Start the game loop
         gameLoop();
     }
 
     // Start the game
-    gameLoop();
+    function startGame() {
+        gameLoop();
+    }
 </script>
 </body>
 </html>
